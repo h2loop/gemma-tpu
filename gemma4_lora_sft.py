@@ -96,8 +96,8 @@ USE_QUANTIZATION = False   # True → QLoRA (NF4 weights), False → LoRA
 RANK             = 16
 ALPHA            = float(2 * RANK)   # 16.0
 
-MAX_SEQ_LEN      = 8192
-BATCH_SIZE       = 2       # reduced from 8 to fit 8k seq len in HBM
+MAX_SEQ_LEN      = 12288
+BATCH_SIZE       = 4
 MAX_STEPS        = 2000    # 4x more steps to compensate for bs 8→2
 EVAL_EVERY       = 500     # evaluate at quarter points
 CKPT_EVERY       = 250     # checkpoint every 250 steps
@@ -161,7 +161,7 @@ _device_memory_summary()
 # If LoraProvider raises on path regex, run: nnx.display(base_model) to inspect names.
 if USE_QUANTIZATION:
     lora_provider = qwix.LoraProvider(
-        module_path=".*q_einsum|.*kv_einsum|.*gate_proj|.*down_proj|.*up_proj",
+        module_path=".*q_einsum|.*kv_einsum|.*attn_vec_einsum|.*gate_proj|.*down_proj|.*up_proj",
         rank=RANK,
         alpha=ALPHA,
         weight_qtype="nf4",
@@ -169,7 +169,7 @@ if USE_QUANTIZATION:
     )
 else:
     lora_provider = qwix.LoraProvider(
-        module_path=".*q_einsum|.*kv_einsum|.*gate_proj|.*down_proj|.*up_proj",
+        module_path=".*q_einsum|.*kv_einsum|.*attn_vec_einsum|.*gate_proj|.*down_proj|.*up_proj",
         rank=RANK,
         alpha=ALPHA,
     )
