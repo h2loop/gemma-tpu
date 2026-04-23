@@ -12,6 +12,8 @@ import time
 
 # Redirect model cache to /dev/shm (tmpfs) to avoid filling local disk.
 os.environ["TMPDIR"] = "/dev/shm"
+# Persist XLA compilation cache so restarts skip the long first-step compile.
+os.environ["JAX_COMPILATION_CACHE_DIR"] = "/tmp/jax_cache"
 
 import jax
 import jax.numpy as jnp
