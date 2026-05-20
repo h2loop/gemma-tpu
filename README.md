@@ -120,19 +120,6 @@ pip uninstall flax -y && pip install git+https://github.com/google/flax
 
 ----
 
-## Artifacts
-
-| Artifact | Location |
-|----------|----------|
-| Model checkpoint (final) | `gs://h2loop-gemma4/checkpoints/lora-run-001/artifacts/final` |
-| Eval results | `gs://h2loop-gemma4/checkpoints/lora-run-001/eval/eval_full/` |
-| Training metrics | `gs://h2loop-gemma4/checkpoints/lora-run-001/artifacts/` |
-| Base model | `gs://h2loop-gemma4/models/gemma-4-31b-it` |
-| Dataset | [CodeV-R1](https://huggingface.co/datasets/zhuyaoyu/CodeV-R1-dataset) |
-| Eval benchmark | [NVlabs/verilog-eval](https://github.com/NVlabs/verilog-eval) |
-
-----
-
 ## Citation & Reading More
 
 If you use this work in a research paper, please cite:
