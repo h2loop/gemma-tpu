@@ -42,8 +42,8 @@ gcloud storage buckets create gs://h2loop-gemma4 \
 gcloud compute tpus tpu-vm create sera-tpu \
   --zone=us-central1-a \
   --project=h2loop-training \
-  --accelerator-type=v6e-8 \
-  --version=v2-alpha-tpuv6e \
+  --accelerator-type=v5p-8 \
+  --version=v2-alpha-tpuv5 \
   --spot
 ```
 

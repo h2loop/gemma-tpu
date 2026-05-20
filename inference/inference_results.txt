@@ -1,0 +1,89 @@
+TPU:
+
+
+┌───────────────────────────┬──────────────────────────────────┐
+  │          Metric           │              Value               │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Output throughput         │ 3,253 tok/s                      │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Peak output throughput    │ 3,520 tok/s                      │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Total throughput (in+out) │ 4,879 tok/s                      │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ TTFT (median)             │ 235 ms                           │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ TPOT (median)             │ 18.71 ms                         │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ P99 ITL                   │ 22.29 ms                         │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ HBM usage                 │ 28.69 / 31.25 GiB per chip (92%) │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Duty cycle under load     │ 98%                              │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ TensorCore utilization    │ 19.3% (memory-bound, expected)   │
+  └───────────────────────────┴──────────────────────────────────┘
+
+
+
+  sudo docker run -itd --name gemma4-tpu \
+    --privileged --network host \
+    --shm-size 16G -v /dev/shm:/dev/shm \
+    --entrypoint vllm vllm/vllm-tpu:gemma4 \
+    serve google/gemma-4-31B-it \
+    --tensor-parallel-size 8 \
+    --max-model-len 4096 \
+    --disable_chunked_mm_input \
+    --host 0.0.0.0 --port 8000
+
+TPU configuration: v2-alpha-tpuv6e
+
+
+GPU:
+
+┌───────────────────────────┬──────────────────────────────────┐
+  │          Metric           │              Value               │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Output throughput         │ 3,158 tok/s                      │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Peak output throughput    │ 3,584 tok/s                      │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Total throughput (in+out) │ 4,736 tok/s                      │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ TTFT (median)             │ 475 ms                           │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ TPOT (median)             │ 18.42 ms                         │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ P99 ITL                   │ 20.49 ms                         │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ HBM usage                 │ 75.42 / 79.65 GiB per chip (95%) │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Request throughput        │ 12.33 req/s                      │
+  ├───────────────────────────┼──────────────────────────────────┤
+  │ Benchmark config          │ 64 prompts, 128 in / 256 out    │
+  └───────────────────────────┴──────────────────────────────────┘
+
+  Model: Gemma 4 31B IT
+  Hardware: 2x H100 80GB (Tensor Parallel)
+  Config: max_len=4096, disable_chunked_mm_input, temperature=0 (greedy)[1:17 PM]sudo docker exec gemma4-h100 vllm bench serve \
+    --backend vllm \
+    --base-url http://localhost:8000 \
+    --model /models/gemma-4-31b-it \
+    --dataset-name random \
+    --num-prompts 64 \
+    --random-input-len 128 \
+    --random-output-len 256 \
+    --request-rate 10000 \
+    --temperature 0
+
+  And the vLLM server was started with:
+
+  sudo docker run -itd --name gemma4-h100 \
+      --gpus all --privileged --network host \
+      --shm-size 16G -v /dev/shm:/dev/shm \
+      -v ~/models:/models \
+      --entrypoint vllm vllm/vllm-openai:latest \
+      serve /models/gemma-4-31b-it \
+      --tensor-parallel-size 2 \
+      --max-model-len 4096 \
+      --disable-chunked-mm-input \
+      --host 0.0.0.0 --port 8000

@@ -1,0 +1,57 @@
+H2LooP Research Only License (ROL)
+
+Copyright (c) 2026 H2LooP AI
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation (the "Software"), to use the
+Software for the following purposes:
+
+PERMITTED USES:
+- Academic and non-commercial research
+- Personal experimentation and evaluation
+- Publication of research results derived from use of this Software
+- Reproducing the experimental findings described in the accompanying paper
+
+PROHIBITED USES:
+- Any commercial use, including but not limited to: integrating the Software
+  into commercial products or services, using outputs to generate revenue, or
+  using the Software in a production environment
+- Redistribution or sublicensing of model weights or checkpoint files, in
+  whole or in part
+- Training or fine-tuning derivative models intended for commercial deployment
+- Use in applications that could cause harm, including but not limited to
+  weapons, surveillance, or autonomous systems without human oversight
+
+ATTRIBUTION:
+Any publication or public work using this Software, the associated training
+recipe, or the evaluation results must cite this work (see CITATION section
+in README.md).
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+DISCLAIMER — THIRD-PARTY MODELS
+
+Google Gemma 4 31B is a model developed by Google DeepMind. We do not claim
+ownership, authorship, or affiliation with this model or Google DeepMind.
+This model was used solely for research, fine-tuning experimentation, and
+comparative evaluation purposes. All rights, trademarks, and intellectual
+property related to Gemma 4 remain with Google DeepMind.
+
+The JAX, Tunix, Qwix, and Flax frameworks are developed by Google. We do not
+claim ownership of these libraries; they are used under their respective
+open-source licenses.
+
+vLLM is developed by the vLLM team (UC Berkeley et al.) and used under the
+Apache 2.0 license.
+
+Our work involves independent analysis and experimental comparison and should
+not be interpreted as endorsement, partnership, or official collaboration with
+any of the above model or framework providers.

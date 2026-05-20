@@ -1,0 +1,20 @@
+# Install JAX for TPU separately first:
+# pip install 'jax[tpu]' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+
+safetensors
+tensorflow
+tensorflow_datasets
+tensorboardX
+transformers
+grain
+datasets
+huggingface_hub
+numpy>2
+optax
+orbax-checkpoint
+gcsfs
+
+# Install from source after the above:
+# pip install git+https://github.com/google/tunix
+# pip install git+https://github.com/google/qwix
+# pip uninstall flax -y && pip install git+https://github.com/google/flax
