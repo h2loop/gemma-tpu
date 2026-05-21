@@ -129,7 +129,7 @@ If you use this work in a research paper, please cite:
 ```bibtex
 @techreport{kishnani2026tpugemma4,
   title={Fine-Tuning and Serving Gemma 4 31B on Google Cloud TPU: A Technical Comparison with GPU Baselines},
-  author={Kishnani, Jatin and Goyel, Mayank and Singh, Amit and Agrawal, Pulkit},
+  author={Jatin Kishnani and Mayank Goyel and Amit Singh and Pulkit Agrawal},
   institution={H2LooP AI},
   year={2026},
   month={May},
