@@ -4,6 +4,8 @@
 
 ## Fine-Tuning and Serving Gemma 4 31B on Google Cloud TPU: _A Technical Comparison with GPU Baselines_
 
+Jatin Kishnani &nbsp;&nbsp; Mayank Goyel &nbsp;&nbsp; Amit Singh &nbsp;&nbsp; Pulkit Agrawal
+
 **Paper:** [`paper/technical_paper.pdf`](paper/technical_paper.pdf) | **License:** [H2LooP Research Only (ROL)](LICENSE)
 
 ----
@@ -125,14 +127,14 @@ pip uninstall flax -y && pip install git+https://github.com/google/flax
 If you use this work in a research paper, please cite:
 
 ```bibtex
-@techreport{h2loop2026tpugemma4,
+@techreport{kishnani2026tpugemma4,
   title={Fine-Tuning and Serving Gemma 4 31B on Google Cloud TPU: A Technical Comparison with GPU Baselines},
-  author={H2LooP AI Engineering},
+  author={Kishnani, Jatin and Goyel, Mayank and Singh, Amit and Agrawal, Pulkit},
   institution={H2LooP AI},
   year={2026},
   month={May},
   note={LoRA SFT, Checkpoint Conversion, and vLLM Inference on TPU v5p and v6e (Trillium)},
-  url={https://github.com/h2loop/sera-tpu}
+  url={https://github.com/h2loop/gemma-tpu}
 }
 ```
 
