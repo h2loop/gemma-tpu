@@ -18,7 +18,7 @@ Lessons learned from hands-on setup of a v6e-4 (Trillium, 1 worker, 4 chips × 3
 | Spot instances | Cannot be stopped, only deleted — model should live in GCS, not on VM disk |
 | Model loading | Tunix downloads model from GCS to `/tmp/models` before loading into HBM — needs disk space or `TMPDIR=/dev/shm` |
 | `/dev/shm` | 355 GB RAM-backed tmpfs on v6e-4 — safe target for model staging; avoids disk pressure |
-| Cross-project bucket | TPU service account from `h2loop-training` needs explicit IAM grant to read buckets in other projects |
+| Cross-project bucket | TPU service account from `YOUR_PROJECT` needs explicit IAM grant to read buckets in other projects |
 | Underlying GCE instance | Named `t1v-n-XXXXXXXX-w-0` — lives in Google-managed project, cannot attach disks directly |
 | Vision tower keys | 356 skipped keys on load (vision tower weights) — expected when loading text-only LoRA from multimodal checkpoint |
 | `qwix.apply_lora_to_model` | Takes `(model, provider)` only — no `get_model_input()` call needed; auto-injects `rngs` for NNX models |
@@ -28,8 +28,8 @@ Lessons learned from hands-on setup of a v6e-4 (Trillium, 1 worker, 4 chips × 3
 ## Step 1 — Create GCS Bucket (skip if exists)
 
 ```bash
-gcloud storage buckets create gs://h2loop-gemma4 \
-  --project=h2loop-training \
+gcloud storage buckets create gs://YOUR_BUCKET \
+  --project=YOUR_PROJECT \
   --location=us-central1 \
   --uniform-bucket-level-access
 ```
@@ -39,15 +39,15 @@ gcloud storage buckets create gs://h2loop-gemma4 \
 ## Step 2 — Create TPU Instance
 
 ```bash
-gcloud compute tpus tpu-vm create sera-tpu \
+gcloud compute tpus tpu-vm create YOUR_TPU_NAME \
   --zone=us-central1-a \
-  --project=h2loop-training \
+  --project=YOUR_PROJECT \
   --accelerator-type=v5p-8 \
   --version=v2-alpha-tpuv5 \
   --spot
 ```
 
-Wait for `Created tpu [sera-tpu]` (~3–5 min).
+Wait for `Created tpu [YOUR_TPU_NAME]` (~3–5 min).
 
 > Spot cannot be stopped — `delete` is the only way to deallocate. Model in GCS survives deletion.
 > v6e-4 is a single-worker slice — no multi-host coordination needed.
@@ -67,8 +67,8 @@ Run this at the start of every local session. If SSH fails repeatedly, run it ag
 ## Step 4 — Install Python 3.11 (required — VM ships with 3.10)
 
 ```bash
-gcloud compute tpus tpu-vm ssh sera-tpu \
-  --zone=us-central1-a --project=h2loop-training --worker=0 \
+gcloud compute tpus tpu-vm ssh YOUR_TPU_NAME \
+  --zone=us-central1-a --project=YOUR_PROJECT --worker=0 \
   --ssh-flag="-o StrictHostKeyChecking=no -o ConnectTimeout=30" \
   --command="sudo add-apt-repository ppa:deadsnakes/ppa -y 2>/dev/null && \
              sudo apt-get update -qq && \
@@ -83,8 +83,8 @@ Should print `Python 3.11.x` and `py311-ok`.
 ## Step 5 — Install JAX + Tunix Stack
 
 ```bash
-gcloud compute tpus tpu-vm ssh sera-tpu \
-  --zone=us-central1-a --project=h2loop-training --worker=0 \
+gcloud compute tpus tpu-vm ssh YOUR_TPU_NAME \
+  --zone=us-central1-a --project=YOUR_PROJECT --worker=0 \
   --ssh-flag="-o StrictHostKeyChecking=no -o ConnectTimeout=30" \
   --command="python3.11 -m venv ~/.venv311 && \
              source ~/.venv311/bin/activate && \
@@ -108,8 +108,8 @@ Should print `jax x.x.x`, `4 devices`, and `pkg-ok`. Takes ~5 min.
 ## Step 6 — Push Training Script
 
 ```bash
-gcloud compute tpus tpu-vm scp /home/azek/gemma4_lora_sft.py sera-tpu:~/gemma4_lora_sft.py \
-  --zone=us-central1-a --project=h2loop-training --worker=0
+gcloud compute tpus tpu-vm scp ~/gemma4_lora_sft.py YOUR_TPU_NAME:~/gemma4_lora_sft.py \
+  --zone=us-central1-a --project=YOUR_PROJECT --worker=0
 ```
 
 ---
@@ -121,8 +121,8 @@ v6e-4 is a single-worker slice — no loop needed. Never put `pkill` and the lau
 `TMPDIR=/dev/shm` routes the model staging download to RAM (355 GB available) instead of the boot disk (which fills up at 97 GB with the 62.5 GB model download).
 
 ```bash
-gcloud compute tpus tpu-vm ssh sera-tpu \
-  --zone=us-central1-a --project=h2loop-training --worker=0 \
+gcloud compute tpus tpu-vm ssh YOUR_TPU_NAME \
+  --zone=us-central1-a --project=YOUR_PROJECT --worker=0 \
   --ssh-flag="-o StrictHostKeyChecking=no -o ConnectTimeout=30" \
   --command="source ~/.venv311/bin/activate && \
              PYTHONUNBUFFERED=1 PJRT_DEVICE=TPU TMPDIR=/dev/shm \
@@ -138,8 +138,8 @@ Should print `launched-0`.
 
 ```bash
 # Worker 0 log (JAX compiles for 3–8 min before step 1 appears)
-gcloud compute tpus tpu-vm ssh sera-tpu \
-  --zone=us-central1-a --project=h2loop-training --worker=0 \
+gcloud compute tpus tpu-vm ssh YOUR_TPU_NAME \
+  --zone=us-central1-a --project=YOUR_PROJECT --worker=0 \
   --ssh-flag="-o StrictHostKeyChecking=no" \
   --command="tail -40 ~/gemma4_lora_sft.log"
 ```
@@ -148,14 +148,14 @@ Expected log sequence:
 ```
 JAX sees 4 devices: [TpuDevice(id=0, ...) ...]
 Mesh: tp=4
-Loading Gemma 4 31B from gs://h2loop-gemma4/models/gemma-4-31b-it ...
+Loading Gemma 4 31B from gs://YOUR_BUCKET/models/gemma-4-31b-it ...
 Model loaded.
 trainable params: ~50M / 31B (0.16%)
 Compiling step fn (takes 3–8 min on first step) ...
 step=1  loss=2.XXXX
 step=20 loss=1.XXXX
 ...
-Done. LoRA adapters saved to: gs://h2loop-gemma4/checkpoints/lora-run-001
+Done. LoRA adapters saved to: gs://YOUR_BUCKET/checkpoints/lora-run-001
 ```
 
 ---
@@ -165,8 +165,8 @@ Done. LoRA adapters saved to: gs://h2loop-gemma4/checkpoints/lora-run-001
 Use a detached subshell — do NOT use `pkill` in the same command as other logic, it will match the current bash args and kill the session.
 
 ```bash
-gcloud compute tpus tpu-vm ssh sera-tpu \
-  --zone=us-central1-a --project=h2loop-training --worker=0 \
+gcloud compute tpus tpu-vm ssh YOUR_TPU_NAME \
+  --zone=us-central1-a --project=YOUR_PROJECT --worker=0 \
   --ssh-flag="-o StrictHostKeyChecking=no -o ConnectTimeout=20" \
   --command="nohup sh -c 'sleep 2 && pkill -9 -f gemma4_lora_sft' \
              </dev/null >/dev/null 2>&1 & echo sched-0"
@@ -177,8 +177,8 @@ gcloud compute tpus tpu-vm ssh sera-tpu \
 ## Delete TPU
 
 ```bash
-gcloud compute tpus tpu-vm delete sera-tpu \
-  --zone=us-central1-a --project=h2loop-training --quiet
+gcloud compute tpus tpu-vm delete YOUR_TPU_NAME \
+  --zone=us-central1-a --project=YOUR_PROJECT --quiet
 ```
 
 GCS bucket and model survive. On next run, skip Steps 1–2 (bucket + TPU) if bucket exists, and skip model download (Step 4 in `gemma4_tpu_lora.md`) if model is already in GCS.
@@ -189,13 +189,13 @@ GCS bucket and model survive. On next run, skip Steps 1–2 (bucket + TPU) if bu
 
 | Action | Command |
 |---|---|
-| Check TPU state | `gcloud compute tpus tpu-vm describe sera-tpu --zone=us-central1-a --project=h2loop-training --format="value(state,health)"` |
+| Check TPU state | `gcloud compute tpus tpu-vm describe YOUR_TPU_NAME --zone=us-central1-a --project=YOUR_PROJECT --format="value(state,health)"` |
 | Re-add SSH key | `ssh-add ~/.ssh/google_compute_engine` |
 | Check running process | `... --worker=0 --command="ps aux \| grep '[g]emma4'"` |
 | Check all workers clear | `... --worker=all --command="ps aux \| grep '[p]ython3' \| grep -v system"` |
 | Tail log | `... --worker=0 --command="tail -40 ~/gemma4_lora_sft.log"` |
-| Check GCS model | `gsutil ls gs://h2loop-gemma4/models/gemma-4-31b-it/` |
-| Check GCS checkpoints | `gsutil ls gs://h2loop-gemma4/checkpoints/lora-run-001/` |
+| Check GCS model | `gsutil ls gs://YOUR_BUCKET/models/gemma-4-31b-it/` |
+| Check GCS checkpoints | `gsutil ls gs://YOUR_BUCKET/checkpoints/lora-run-001/` |
 
 ---
 
@@ -213,7 +213,7 @@ GCS bucket and model survive. On next run, skip Steps 1–2 (bucket + TPU) if bu
 
 6. **Boot disk fills on model load** — Tunix stages the model in `/tmp/models` before loading into HBM. For a 62.5 GB model on a 97 GB boot disk (85 GB already used), this fills the disk and crashes mid-traceback. Fix: `TMPDIR=/dev/shm` at launch. Also clear `/tmp/models` before retrying: `sudo rm -rf /tmp/models`.
 
-7. **Cross-project GCS access** — The TPU service account is scoped to `h2loop-training`. If the model bucket lives in another project, grant access explicitly:
+7. **Cross-project GCS access** — The TPU service account is scoped to `YOUR_PROJECT`. If the model bucket lives in another project, grant access explicitly:
    ```bash
    gsutil iam ch serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com:roles/storage.objectViewer gs://BUCKET
    ```

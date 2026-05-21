@@ -78,7 +78,7 @@ def run_tunix_benchmark(args):
     from tunix.generate import sampler as sampler_lib
     from tunix.generate import tokenizer_adapter as tokenizer_lib
 
-    MODEL_GCS_PATH = "gs://h2loop-gemma4/models/gemma-4-31b-it"
+    MODEL_GCS_PATH = "gs://YOUR_BUCKET/models/gemma-4-31b-it"
     TOKENIZER_PATH = "gs://gemma-data/tokenizers/tokenizer_gemma3.model"
 
     log("=" * 60)

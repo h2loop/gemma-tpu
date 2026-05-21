@@ -242,8 +242,8 @@ def merge_and_load(base_model_path, ckpt_dir, ckpt_step, rank, alpha,
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base-model", default="gs://h2loop-gemma4/models/gemma-4-31b-it")
-    ap.add_argument("--ckpt-dir",   default="gs://h2loop-gemma4/checkpoints/lora-run-001")
+    ap.add_argument("--base-model", default="gs://YOUR_BUCKET/models/gemma-4-31b-it")
+    ap.add_argument("--ckpt-dir",   default="gs://YOUR_BUCKET/checkpoints/lora-run-001")
     ap.add_argument("--ckpt-step",  type=int, default=None)
     ap.add_argument("--lora-rank",  type=int,   default=64)
     ap.add_argument("--lora-alpha", type=float, default=64.0)

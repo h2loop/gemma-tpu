@@ -88,8 +88,8 @@ def _device_memory_summary() -> None:
             log(f"  {d}: memory_stats unavailable")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-MODEL_GCS_PATH   = "gs://h2loop-gemma4/models/gemma-4-31b-it"
-CKPT_DIR         = "gs://h2loop-gemma4/checkpoints/lora-run-001"
+MODEL_GCS_PATH   = "gs://YOUR_BUCKET/models/gemma-4-31b-it"
+CKPT_DIR         = "gs://YOUR_BUCKET/checkpoints/lora-run-001"
 LOG_DIR          = "/tmp/tensorboard/lora"
 # tokenizer_gemma3.model is the same SentencePiece vocab used by Gemma 4.
 # If this 403s, see docs § "Tokenizer path may 403" for fallback.

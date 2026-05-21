@@ -7,8 +7,8 @@ proper duty cycle) works on it without trace-level issues.
 
 Usage:
     python3 orbax_to_peft.py \
-        --base-model gs://h2loop-gemma4/models/gemma-4-31b-it \
-        --ckpt-dir   gs://h2loop-gemma4/checkpoints/lora-run-001 \
+        --base-model gs://YOUR_BUCKET/models/gemma-4-31b-it \
+        --ckpt-dir   gs://YOUR_BUCKET/checkpoints/lora-run-001 \
         --ckpt-step  1244 \
         --output-dir /dev/shm/merged_gemma4_31b \
         --rank 64 --alpha 64.0
@@ -123,8 +123,8 @@ def _safetensors_key(tunix_path: str) -> str | list[tuple[str, slice]]:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base-model", default="gs://h2loop-gemma4/models/gemma-4-31b-it")
-    ap.add_argument("--ckpt-dir",   default="gs://h2loop-gemma4/checkpoints/lora-run-001")
+    ap.add_argument("--base-model", default="gs://YOUR_BUCKET/models/gemma-4-31b-it")
+    ap.add_argument("--ckpt-dir",   default="gs://YOUR_BUCKET/checkpoints/lora-run-001")
     ap.add_argument("--ckpt-step",  type=int, default=None)
     ap.add_argument("--output-dir", default="/dev/shm/merged_gemma4_31b")
     ap.add_argument("--rank",  type=int,   default=64)

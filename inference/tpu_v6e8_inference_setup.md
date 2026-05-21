@@ -9,7 +9,7 @@
 | Type | `v6e-8` (8 chips × 31.25 GiB HBM = 250 GiB) |
 | Runtime | **`v2-alpha-tpuv6e`** (not `tpu-ubuntu2204-base`) |
 | Preemptible | yes |
-| Project | `h2loop-training` |
+| Project | `YOUR_PROJECT` |
 
 ```bash
 gcloud compute tpus tpu-vm create gemma4-inference \
@@ -156,7 +156,7 @@ ssh gemma4-inference 'source ~/.venv311/bin/activate && \
 2. **Docker required for Gemma 4** — pip vllm-tpu has version conflicts (jax 0.9.2 not on PyPI, transformers/hub breaks local paths)
 3. **Use `--entrypoint vllm`** — default entrypoint in the image expects args in a different format
 4. **Model via HF repo ID only** — local path (`/dev/shm/...`) is rejected by huggingface_hub validator
-5. **Preemptible = will be deleted** — model lives in GCS (`gs://h2loop-gemma4/models/gemma-4-31b-it/`), not on VM
+5. **Preemptible = will be deleted** — model lives in GCS (`gs://YOUR_BUCKET/models/gemma-4-31b-it/`), not on VM
 6. **v6e-8 capacity is scarce** — asia-northeast1-b was the only zone with availability across all tested regions
 7. **XLA compilation on first start: ~8 min** — compiles for each padded token bucket size
 8. **`tpu-info` shows PID=None** for Docker workloads — use duty cycle/HBM metrics instead

@@ -22,7 +22,7 @@ This repository contains the complete source code to replicate the findings in o
 ## Repository Structure
 
 ```
-sera-tpu/
+gemma-tpu/
 ├── training/                   # TPU training recipe
 │   ├── gemma4_lora_sft.py      # Main training script (JAX + Tunix + Qwix)
 │   ├── codev_dataset.py        # CodeV-R1 data pipeline (Grain-based)
@@ -74,8 +74,8 @@ Checkpoints save to GCS every 100 steps. Training completes in ~3.3 hours on v5p
 
 ```bash
 python3 training/orbax_to_peft.py \
-  --base-model gs://h2loop-gemma4/models/gemma-4-31b-it \
-  --ckpt-dir gs://h2loop-gemma4/checkpoints/lora-run-001 \
+  --base-model gs://YOUR_BUCKET/models/gemma-4-31b-it \
+  --ckpt-dir gs://YOUR_BUCKET/checkpoints/lora-run-001 \
   --ckpt-step 1244 \
   --output-dir /dev/shm/merged_gemma4_31b
 ```
