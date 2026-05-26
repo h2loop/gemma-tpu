@@ -1,6 +1,4 @@
-<p align="center">
-  <strong>sera-tpu</strong>
-</p>
+
 
 ## Fine-Tuning and Serving Gemma 4 31B on Google Cloud TPU: _A Technical Comparison with GPU Baselines_
 
