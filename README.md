@@ -196,7 +196,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 **Areas we'd love help with:**
 - Dataset adapters (ShareGPT, Alpaca formats)
 - Benchmarks on other TPU types (v5e, v4)
-- Gemma 9B/12B configurations
+- Add support for Gemma 9B/12B (currently 31B only)
 - Improved documentation
 
 ----
