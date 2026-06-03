@@ -1,0 +1,62 @@
+# Configuration for CodeV-R1 Verilog fine-tuning
+# This is the config used in our paper benchmarks
+
+model:
+  path: "gs://YOUR_BUCKET/models/gemma-4-31b-it"
+  variant: "gemma4_31b"
+  tokenizer: "gs://gemma-data/tokenizers/tokenizer_gemma3.model"
+
+lora:
+  rank: 64
+  alpha: 64
+  dropout: 0.05
+  target_modules:
+    - "q_einsum"
+    - "kv_einsum"
+    - "attn_vec_einsum"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  learning_rate: 1.0e-4
+  lr_end_value: 0.0
+  weight_decay: 0.001
+  warmup_steps: 100
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 2
+  max_seq_len: 3072
+  max_steps: null
+  num_epochs: 1
+  gradient_checkpointing: true
+
+dataset:
+  type: "codev"  # Built-in CodeV-R1 dataset handler
+  path: "zhuyaoyu/CodeV-R1-dataset"
+  columns:
+    prompt: "question"
+    response: "answer"
+  system_prompt: |
+    You are an expert Verilog hardware designer. Generate clean, synthesizable
+    Verilog code based on the specification provided. Include module declaration,
+    port definitions, and complete implementation.
+  preprocessing:
+    strip_reasoning: true  # Remove <think>...</think> traces
+    max_samples: null
+    shuffle_seed: 42
+
+checkpointing:
+  output_dir: "gs://YOUR_BUCKET/checkpoints/codev-run-001"
+  save_every_steps: 100
+  keep_last_n: 3
+  resume_from: null
+
+logging:
+  log_dir: "gs://YOUR_BUCKET/logs/codev-run-001"
+  log_every_steps: 10
+  wandb:
+    enabled: false
+    project: "gemma-tpu-codev"
+
+mesh:
+  shape: "auto"

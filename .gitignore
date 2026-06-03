@@ -34,3 +34,7 @@ tpu_eval_per_problem.json
 
 # OS
 Thumbs.db
+
+# Local config overrides (keep default.yaml and examples)
+configs/local_*.yaml
+configs/*_secret.yaml

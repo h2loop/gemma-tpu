@@ -1,19 +1,154 @@
+## Fine-Tuning Gemma on Google Cloud TPU
 
-
-## Fine-Tuning and Serving Gemma 4 31B on Google Cloud TPU: _A Technical Comparison with GPU Baselines_
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 Jatin Kishnani &nbsp;&nbsp; Mayank Goyel &nbsp;&nbsp; Amit Singh &nbsp;&nbsp; Pulkit Agrawal
 
-**Paper:** [`paper/technical_paper.pdf`](paper/technical_paper.pdf) | **License:** [H2LooP Research Only (ROL)](LICENSE)
+**Paper:** [`paper/technical_paper.pdf`](paper/technical_paper.pdf)
 
 ----
 
-This repository contains the complete source code to replicate the findings in our technical report on LoRA fine-tuning Gemma 4 31B on TPU v5p-8 and serving with vLLM on TPU v6e-8 (Trillium), benchmarked against a 2xH100 GPU baseline.
+A production-ready recipe for LoRA fine-tuning Gemma models on Google Cloud TPU, with vLLM inference support. Bring your own dataset — works with any JSONL, HuggingFace dataset, or chat-format data.
 
-**Key results:**
+**Benchmark results (Gemma 4 31B, CodeV-R1 dataset):**
 - Training: **1.61x faster**, **2.12x cheaper** on TPU v5p-8 vs 2xH100
-- Inference (4096-token context): **66% higher throughput**, **23.6x faster TTFT** on TPU v6e-8
-- Eval: pass@1 = 0.641 (TPU) vs 0.697 (GPU) on verilog-eval spec-to-RTL (156 problems)
+- Inference: **66% higher throughput**, **23.6x faster TTFT** at 4096-token context on TPU v6e-8
+
+----
+
+## Quick Start
+
+### Option 1: Docker (Recommended)
+
+```bash
+# Build
+docker build -t gemma-tpu .
+
+# Run on TPU VM
+docker run --privileged --network host \
+  -v /dev/shm:/dev/shm \
+  -v $(pwd)/configs:/app/configs \
+  gemma-tpu python training/train.py --config configs/your_config.yaml
+```
+
+### Option 2: Manual Setup
+
+```bash
+# Provision TPU
+gcloud compute tpus tpu-vm create my-tpu \
+  --zone=us-central1-a \
+  --accelerator-type=v5p-8 \
+  --version=v2-alpha-tpuv5
+
+# Install dependencies
+pip install 'jax[tpu]' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+pip install -r training/requirements.txt
+pip install git+https://github.com/google/tunix git+https://github.com/google/qwix
+
+# Train with config
+python training/train.py --config configs/default.yaml
+```
+
+----
+
+## Bring Your Own Dataset
+
+Create a YAML config pointing to your data:
+
+```yaml
+# configs/my_dataset.yaml
+dataset:
+  type: "jsonl"  # or "huggingface"
+  path: "gs://my-bucket/data/train.jsonl"  # or "username/dataset-name"
+  columns:
+    prompt: "instruction"   # your prompt column
+    response: "output"      # your response column
+  system_prompt: "You are a helpful assistant."  # optional
+```
+
+**Supported formats:**
+- **JSONL**: `{"prompt": "...", "response": "..."}`
+- **HuggingFace**: Any dataset with configurable column mapping
+- **Chat format**: `{"messages": [{"role": "user", "content": "..."}, ...]}`
+
+See [`configs/default.yaml`](configs/default.yaml) for all options.
+
+----
+
+## TPU Cost & Time Estimates
+
+| TPU Type | Chips | HBM | Gemma 31B | Gemma 12B | Gemma 9B | On-Demand $/hr |
+|----------|-------|-----|-----------|-----------|----------|----------------|
+| v5p-8 | 4 | 411 GB | ~3.3 hr | ~1.5 hr | ~1.2 hr | $16.80 |
+| v5e-8 | 8 | 128 GB | OOM | ~2.5 hr | ~2.0 hr | $12.80 |
+| v5e-4 | 4 | 64 GB | OOM | OOM | ~3.5 hr | $6.40 |
+| v6e-8 | 8 | 250 GB | ~2.8 hr | ~1.2 hr | ~1.0 hr | $21.52 |
+
+*Times estimated for 10K samples, seq_len=3072, batch=8. Spot instances are 60-70% cheaper.*
+
+----
+
+## Checkpoint Resume (Spot Preemption)
+
+Checkpoints save to GCS automatically. To resume after preemption:
+
+```yaml
+# In your config
+checkpointing:
+  output_dir: "gs://my-bucket/checkpoints/run-001"
+  resume_from: "latest"  # or specific step number like 500
+```
+
+Or via CLI:
+```bash
+python training/train.py --config configs/my_config.yaml --resume latest
+```
+
+----
+
+## Merge & Push to HuggingFace Hub
+
+```bash
+# Merge LoRA into base model
+python training/orbax_to_peft.py \
+  --base-model google/gemma-4-31b-it \
+  --ckpt-dir gs://my-bucket/checkpoints/run-001 \
+  --ckpt-step 1244 \
+  --output-dir ./merged_model
+
+# Push to Hub
+python training/orbax_to_peft.py \
+  --base-model google/gemma-4-31b-it \
+  --ckpt-dir gs://my-bucket/checkpoints/run-001 \
+  --ckpt-step 1244 \
+  --push-to-hub your-username/my-finetuned-gemma \
+  --hf-token $HF_TOKEN
+```
+
+----
+
+## Example Output
+
+**Prompt:** Write a Verilog module for a 4-bit counter with enable and reset.
+
+**Response (fine-tuned on CodeV-R1):**
+```verilog
+module counter_4bit (
+    input wire clk,
+    input wire rst_n,
+    input wire enable,
+    output reg [3:0] count
+);
+
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n)
+        count <= 4'b0000;
+    else if (enable)
+        count <= count + 1'b1;
+end
+
+endmodule
+```
 
 ----
 
@@ -21,132 +156,55 @@ This repository contains the complete source code to replicate the findings in o
 
 ```
 gemma-tpu/
-├── training/                   # TPU training recipe
-│   ├── gemma4_lora_sft.py      # Main training script (JAX + Tunix + Qwix)
-│   ├── codev_dataset.py        # CodeV-R1 data pipeline (Grain-based)
-│   ├── orbax_to_peft.py        # Orbax checkpoint → merged safetensors
-│   ├── trajectory_dataset.py   # Dataset utilities
-│   ├── analyze_seqlen.py       # Sequence length analysis for max_seq_len selection
-│   ├── tpu_vm_setup.md         # TPU VM provisioning & environment guide
-│   └── requirements.txt        # Python dependencies
+├── configs/                    # YAML configuration files
+│   ├── default.yaml            # Template config with all options
+│   └── codev_verilog.yaml      # Config used in paper benchmarks
+├── training/
+│   ├── train.py                # Main entry point (CLI)
+│   ├── gemma4_lora_sft.py      # Core training logic
+│   ├── orbax_to_peft.py        # Checkpoint merge + Hub upload
+│   └── requirements.txt
 ├── eval/
-│   └── evaluate_tpu.py         # verilog-eval pass@k evaluation on TPU
+│   └── evaluate_tpu.py         # verilog-eval benchmark
 ├── inference/
-│   ├── benchmark_inference.py  # vLLM bench serve wrapper
-│   ├── inference_results.txt   # Raw benchmark outputs (TPU + GPU)
-│   └── tpu_v6e8_inference_setup.md  # v6e-8 Trillium vLLM setup guide
+│   └── tpu_v6e8_inference_setup.md
 ├── paper/
-│   ├── technical_paper.tex     # Full LaTeX source
-│   ├── technical_paper.pdf     # Compiled PDF (17 pages)
-│   ├── plot_report.py          # Generate all figures
-│   └── plot_curves.py          # Training curve plots
-├── LICENSE                     # H2LooP Research Only License
-└── README.md
-```
-
-## Quick Start
-
-### 1. Provision TPU VM
-
-```bash
-gcloud compute tpus tpu-vm create sera-tpu \
-  --zone=us-central1-a \
-  --project=YOUR_PROJECT \
-  --accelerator-type=v5p-8 \
-  --version=v2-alpha-tpuv5 \
-  --spot
-```
-
-See [`training/tpu_vm_setup.md`](training/tpu_vm_setup.md) for full setup (Python 3.11, JAX, Tunix stack).
-
-### 2. Train
-
-```bash
-PYTHONUNBUFFERED=1 PJRT_DEVICE=TPU TMPDIR=/dev/shm \
-  python3 -u training/gemma4_lora_sft.py
-```
-
-Checkpoints save to GCS every 100 steps. Training completes in ~3.3 hours on v5p-8.
-
-### 3. Merge Checkpoint
-
-```bash
-python3 training/orbax_to_peft.py \
-  --base-model gs://YOUR_BUCKET/models/gemma-4-31b-it \
-  --ckpt-dir gs://YOUR_BUCKET/checkpoints/lora-run-001 \
-  --ckpt-step 1244 \
-  --output-dir /dev/shm/merged_gemma4_31b
-```
-
-### 4. Evaluate
-
-```bash
-python3 eval/evaluate_tpu.py \
-  --model-dir /dev/shm/merged_gemma4_31b \
-  --n-samples 5 --temperature 0.8
-```
-
-### 5. Serve with vLLM (TPU v6e-8)
-
-See [`inference/tpu_v6e8_inference_setup.md`](inference/tpu_v6e8_inference_setup.md) for the full Docker setup.
-
-```bash
-sudo docker run -itd --name gemma4-tpu \
-  --privileged --network host \
-  --shm-size 16G -v /dev/shm:/dev/shm \
-  --entrypoint vllm vllm/vllm-tpu:gemma4 \
-  serve google/gemma-4-31B-it \
-  --tensor-parallel-size 8 \
-  --max-model-len 4096 \
-  --disable_chunked_mm_input
+│   └── technical_paper.pdf     # Full technical report
+├── Dockerfile
+├── CONTRIBUTING.md
+└── LICENSE                     # Apache 2.0
 ```
 
 ----
 
-## Installation
-
-```bash
-# JAX for TPU (install first)
-pip install 'jax[tpu]' -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-
-# Dependencies
-pip install -r training/requirements.txt
-
-# Tunix / Qwix / Flax (from source)
-pip install git+https://github.com/google/tunix
-pip install git+https://github.com/google/qwix
-pip uninstall flax -y && pip install git+https://github.com/google/flax
-```
-
-----
-
-## Citation & Reading More
-
-If you use this work in a research paper, please cite:
+## Citation
 
 ```bibtex
 @techreport{kishnani2026tpugemma4,
-  title={Fine-Tuning and Serving Gemma 4 31B on Google Cloud TPU: A Technical Comparison with GPU Baselines},
+  title={Fine-Tuning and Serving Gemma 4 on Google Cloud TPU},
   author={Jatin Kishnani and Mayank Goyel and Amit Singh and Pulkit Agrawal},
   institution={H2LooP AI},
   year={2026},
-  month={May},
-  note={LoRA SFT, Checkpoint Conversion, and vLLM Inference on TPU v5p and v6e (Trillium)},
   url={https://github.com/h2loop/gemma-tpu}
 }
 ```
 
-**Related:**
-- [Gemma 4 Technical Report](https://ai.google.dev/gemma) — Google DeepMind, 2025
-- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) — Hu et al., ICLR 2022
-- [vLLM: Efficient Memory Management for LLM Serving with PagedAttention](https://arxiv.org/abs/2309.06180) — Kwon et al., SOSP 2023
-- [CodeV: Empowering LLMs for Verilog Generation](https://arxiv.org/abs/2407.10424) — Zhu et al., 2024
-- [VerilogEval: Evaluating LLMs for Verilog Code Generation](https://arxiv.org/abs/2309.07544) — Liu et al., ICCAD 2023
+----
+
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**Areas we'd love help with:**
+- Dataset adapters (ShareGPT, Alpaca formats)
+- Benchmarks on other TPU types (v5e, v4)
+- Gemma 9B/12B configurations
+- Improved documentation
 
 ----
 
 ## License
 
-Released under the [H2LooP Research Only License (ROL)](LICENSE). See LICENSE for full terms.
+[Apache 2.0](LICENSE)
 
-**Disclaimer:** Google Gemma 4 31B is developed by Google DeepMind. JAX, Tunix, Qwix, and Flax are Google open-source projects. vLLM is developed by UC Berkeley et al. We do not claim ownership or affiliation with these projects. This work is independent research and should not be interpreted as endorsement or collaboration with any model provider.
+**Disclaimer:** Gemma models are developed by Google DeepMind. We do not claim ownership or affiliation. This is independent research.

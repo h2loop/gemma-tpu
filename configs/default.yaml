@@ -1,0 +1,142 @@
+# gemma-tpu training configuration
+# Copy this file and modify for your use case
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model
+# ─────────────────────────────────────────────────────────────────────────────
+model:
+  # Path to base model (GCS path or local directory)
+  path: "gs://YOUR_BUCKET/models/gemma-4-31b-it"
+
+  # Model variant: gemma4_31b, gemma4_12b, gemma4_9b
+  variant: "gemma4_31b"
+
+  # Tokenizer path (usually same as model path, or explicit sentencepiece path)
+  tokenizer: "gs://gemma-data/tokenizers/tokenizer_gemma3.model"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LoRA Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+lora:
+  rank: 64
+  alpha: 64
+  dropout: 0.05
+
+  # Target modules (Tunix naming convention)
+  # For Gemma 4: q_einsum, kv_einsum, attn_vec_einsum, gate_proj, up_proj, down_proj
+  target_modules:
+    - "q_einsum"
+    - "kv_einsum"
+    - "attn_vec_einsum"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Training Hyperparameters
+# ─────────────────────────────────────────────────────────────────────────────
+training:
+  # Optimizer
+  learning_rate: 1.0e-4
+  lr_end_value: 0.0
+  weight_decay: 0.001
+  warmup_steps: 100
+
+  # Batch size
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 2  # effective_batch = per_device * grad_accum * num_devices
+
+  # Sequence length
+  max_seq_len: 3072
+
+  # Training duration
+  max_steps: null  # Set to limit steps; null = train for num_epochs
+  num_epochs: 1
+
+  # Gradient checkpointing (remat) - saves memory at cost of ~20% speed
+  gradient_checkpointing: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dataset
+# ─────────────────────────────────────────────────────────────────────────────
+dataset:
+  # Dataset type: "huggingface", "jsonl", "codev"
+  type: "jsonl"
+
+  # For huggingface: dataset name (e.g., "zhuyaoyu/CodeV-R1-dataset")
+  # For jsonl: path to .jsonl file (local or GCS)
+  path: "gs://YOUR_BUCKET/data/train.jsonl"
+
+  # Column mapping for custom datasets
+  # Maps your dataset columns to: prompt, response (or messages for chat format)
+  columns:
+    prompt: "prompt"      # Column containing the input/instruction
+    response: "response"  # Column containing the target output
+    # For chat format, use:
+    # messages: "messages"  # Column containing list of {"role": "user/assistant", "content": "..."}
+
+  # Optional: system prompt prepended to all examples
+  system_prompt: null
+
+  # Optional: preprocessing
+  preprocessing:
+    # Strip <think>...</think> reasoning traces from responses
+    strip_reasoning: false
+
+    # Max samples to use (null = use all)
+    max_samples: null
+
+    # Shuffle seed
+    shuffle_seed: 42
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Checkpointing
+# ─────────────────────────────────────────────────────────────────────────────
+checkpointing:
+  # Output directory for checkpoints (GCS path recommended for spot instances)
+  output_dir: "gs://YOUR_BUCKET/checkpoints/run-001"
+
+  # Save every N optimizer steps
+  save_every_steps: 100
+
+  # Keep last N checkpoints (older ones deleted)
+  keep_last_n: 3
+
+  # Resume from checkpoint (set to step number, or "latest")
+  resume_from: null
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Evaluation
+# ─────────────────────────────────────────────────────────────────────────────
+evaluation:
+  # Evaluate every N steps (0 = disable)
+  eval_every_steps: 0
+
+  # Eval dataset (same format options as training dataset)
+  eval_dataset: null
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Logging
+# ─────────────────────────────────────────────────────────────────────────────
+logging:
+  # Log directory (for TensorBoard, metrics JSON)
+  log_dir: "gs://YOUR_BUCKET/logs/run-001"
+
+  # Log every N steps
+  log_every_steps: 10
+
+  # Weights & Biases (optional)
+  wandb:
+    enabled: false
+    project: "gemma-tpu"
+    run_name: null  # Auto-generated if null
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Hardware / Mesh Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+mesh:
+  # Auto-detect based on available TPU chips, or specify explicitly
+  # For v5p-8 (4 chips): [1, 4]
+  # For v5p-16 (8 chips): [2, 4]
+  # For v6e-8 (8 chips): [2, 4]
+  shape: "auto"
