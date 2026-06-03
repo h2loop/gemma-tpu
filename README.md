@@ -97,7 +97,7 @@ sudo docker run -itd --name gemma4-tpu \
   --entrypoint vllm vllm/vllm-tpu:gemma4 \
   serve google/gemma-4-31B-it \
   --tensor-parallel-size 8 \
-  --max-model-len 16384 \
+  --max-model-len 4096 \
   --disable_chunked_mm_input
 ```
 
