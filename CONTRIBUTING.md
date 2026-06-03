@@ -21,7 +21,7 @@ We welcome contributions! This project aims to make TPU fine-tuning accessible t
 ### Areas We'd Love Help With
 
 - **Dataset adapters**: Add support for more dataset formats (ShareGPT, Alpaca, custom JSONL)
-- **Model variants**: Test and document Gemma 9B/12B configurations
+- **Model variants**: Add support for Gemma 9B/12B (currently 31B only)
 - **TPU types**: Benchmark on v5e, v4, or other TPU configurations
 - **Inference**: Improve vLLM-TPU setup documentation
 - **Docker**: Help create reproducible container images

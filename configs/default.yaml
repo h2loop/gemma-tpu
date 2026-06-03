@@ -8,7 +8,7 @@ model:
   # Path to base model (GCS path or local directory)
   path: "gs://YOUR_BUCKET/models/gemma-4-31b-it"
 
-  # Model variant: gemma4_31b, gemma4_12b, gemma4_9b
+  # Model variant (currently only gemma4_31b is supported)
   variant: "gemma4_31b"
 
   # Tokenizer path (usually same as model path, or explicit sentencepiece path)

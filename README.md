@@ -75,16 +75,14 @@ See [`configs/default.yaml`](configs/default.yaml) for all options.
 
 ----
 
-## TPU Cost & Time Estimates
+## TPU Cost & Time Estimates (Gemma 4 31B)
 
-| TPU Type | Chips | HBM | Gemma 31B | Gemma 12B | Gemma 9B | On-Demand $/hr |
-|----------|-------|-----|-----------|-----------|----------|----------------|
-| v5p-8 | 4 | 411 GB | ~3.3 hr | ~1.5 hr | ~1.2 hr | $16.80 |
-| v5e-8 | 8 | 128 GB | OOM | ~2.5 hr | ~2.0 hr | $12.80 |
-| v5e-4 | 4 | 64 GB | OOM | OOM | ~3.5 hr | $6.40 |
-| v6e-8 | 8 | 250 GB | ~2.8 hr | ~1.2 hr | ~1.0 hr | $21.52 |
+| TPU Type | Chips | HBM | Training Time | On-Demand $/hr |
+|----------|-------|-----|---------------|----------------|
+| v5p-8 | 4 | 411 GB | ~3.3 hr | $16.80 |
+| v6e-8 | 8 | 250 GB | ~2.8 hr | $21.52 |
 
-*Times estimated for 10K samples, seq_len=3072, batch=8. Spot instances are 60-70% cheaper.*
+*Times for 10K samples, seq_len=3072, batch=8. Spot instances are 60-70% cheaper. Script currently supports Gemma 4 31B only.*
 
 ----
 

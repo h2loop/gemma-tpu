@@ -25,8 +25,6 @@ def merge_cli_overrides(config: dict, args: argparse.Namespace) -> dict:
     """Merge CLI arguments into config, CLI takes precedence."""
     if args.model_path:
         config.setdefault("model", {})["path"] = args.model_path
-    if args.model_variant:
-        config.setdefault("model", {})["variant"] = args.model_variant
     if args.dataset_path:
         config.setdefault("dataset", {})["path"] = args.dataset_path
     if args.output_dir:
@@ -81,8 +79,7 @@ Examples:
 
     parser.add_argument("--config", "-c", required=True, help="Path to YAML config file")
     parser.add_argument("--model-path", help="Override model.path")
-    parser.add_argument("--model-variant", choices=["gemma4_31b", "gemma4_12b", "gemma4_9b"],
-                        help="Override model.variant")
+    # model-variant removed: script only supports gemma4_31b currently
     parser.add_argument("--dataset-path", help="Override dataset.path")
     parser.add_argument("--output-dir", help="Override checkpointing.output_dir")
     parser.add_argument("--max-steps", type=int, help="Override training.max_steps")
