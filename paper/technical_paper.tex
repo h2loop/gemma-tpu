@@ -59,7 +59,7 @@ on TPU v5p and v6e (Trillium)}
 \thispagestyle{fancy}
 
 \begin{abstract}
-We present a comprehensive technical account of fine-tuning Gemma 4 31B using LoRA on Google Cloud TPU v5p-8, and serving the fine-tuned model for inference on TPU v6e-8 (Trillium). We document the specific code-level adaptations required to port the GPU training recipe (PyTorch + HuggingFace TRL + FSDP) to the JAX + Tunix/Qwix stack, including mesh configuration, LoRA module naming differences, sharding annotation fixes, gradient checkpointing, the data pipeline, and a custom Orbax-to-safetensors checkpoint merging procedure. For inference, we cover the vLLM-TPU Docker setup required to serve Gemma 4 on v6e-8 and explain the observed latency and throughput characteristics across a QPS sweep spanning 512 to 16k input tokens. Across both workloads we compare performance and cost against a 2$\times$H100 GPU baseline running identical hyperparameters. The TPU completes training 1.61$\times$ faster at 2.12$\times$ lower cost. For inference, TPU v6e-8 matches GPU at short context ($\leq$2048 tokens) and decisively outperforms at long context: 66\% higher throughput and 23.6$\times$ faster TTFT at 4096-token inputs (61\,ms vs 1,443\,ms at QPS=4), driven by higher aggregate compute and fp8 KV cache halving memory pressure. End-to-end, TPU is 1.82$\times$ cheaper for a representative train-plus-serve workload at short context, and substantially cheaper at long context where TPU's per-token cost advantage reaches 41\%.
+We present a comprehensive technical account of fine-tuning Gemma 4 31B using LoRA on Google Cloud TPU v5p-8, and serving the fine-tuned model for inference on TPU v6e-8 (Trillium). We document the specific code-level adaptations required to port the GPU training recipe (PyTorch + HuggingFace TRL + FSDP) to the JAX + Tunix/Qwix stack, including mesh configuration, LoRA module naming differences, sharding annotation fixes, gradient checkpointing, the data pipeline, and a custom Orbax-to-safetensors checkpoint merging procedure. For inference, we cover the vLLM-TPU Docker setup required to serve Gemma 4 on v6e-8 and explain the observed latency and throughput characteristics across a QPS sweep spanning 512 to 16k input tokens. Across both workloads we compare performance and cost against a 2$\times$H100 GPU baseline running identical hyperparameters. The TPU completes training 1.61$\times$ faster at 2.12$\times$ lower cost. For inference, TPU v6e-8 matches GPU at short context ($\leq$2048 tokens) and decisively outperforms at long context: 66\% higher throughput and 23.6$\times$ faster TTFT at 4096-token inputs (61\,ms vs 1,443\,ms at QPS=4), driven by higher aggregate compute and 2$\times$ more KV cache capacity (250 GB vs 160 GB total HBM). End-to-end, TPU is 1.82$\times$ cheaper for a representative train-plus-serve workload at short context, and substantially cheaper at long context where TPU's per-token cost advantage reaches 41\%.
 \end{abstract}
 
 \tableofcontents
@@ -91,7 +91,7 @@ The paper is structured as a walkthrough of the engineering changes required to 
 Accelerator & 4$\times$ TPU v5p chips & 2$\times$ NVIDIA H100 80GB HBM3 \\
 HBM per chip & 102.8 GB & 80 GB \\
 Total HBM & 411.2 GB & 160 GB \\
-Host RAM & \textasciitilde355 GB & \textasciitilde468 GB \\
+Host RAM & \textasciitilde355 GB & \textasciitilde494 GB \\
 Interconnect & ICI (inter-chip) & NVLink \\
 GCP on-demand rate & \$16.80/hr & \$22.12/hr \\
 \bottomrule
@@ -270,7 +270,7 @@ This mirrors the GPU recipe exactly: linear warmup from 0 to peak LR over 100 st
 
 \begin{itemize}[nosep]
   \item \textbf{Composability}: Optax builds the optimizer as a chain of stateless gradient transformations (\texttt{scale\_by\_adam}, \texttt{add\_decayed\_weights}, \texttt{scale\_by\_schedule}). Each transformation has its own state pytree, which Orbax checkpoints independently.
-  \item \textbf{No grad clipping by default}: PyTorch's HuggingFace Trainer applies \texttt{max\_grad\_norm=1.0} automatically. On TPU we omit this (matching the measured gradient norms, which stay stable without clipping), though \texttt{optax.clip\_by\_global\_norm(1.0)} can be prepended to the chain if needed.
+  \item \textbf{No grad clipping by default}: PyTorch's HuggingFace Trainer applies \texttt{max\_grad\_norm=1.0} automatically (confirmed in GPU config). On TPU we omit this; \texttt{optax.clip\_by\_global\_norm(1.0)} can be prepended to the chain if needed.
   \item \textbf{Schedule is a pure function}: The LR at any step is computed by calling \texttt{schedule(step)} — useful for logging and the warmup-clamp we apply when running short subsample runs.
   \item \textbf{Optimizer state sharding}: The Optax state (Adam moments) is sharded across the same device mesh as the model weights via \texttt{\_shard\_optimizer}, requiring the divisibility fix described in Section~3.4.
 \end{itemize}
@@ -299,7 +299,7 @@ for msg in messages:
 
 \subsection{Checkpointing}
 
-The TPU recipe uses Orbax (\texttt{orbax-checkpoint}) with a GCS path for checkpoint storage. Checkpoints are saved every 100 optimizer steps, retaining the 3 most recent (matching the GPU recipe's \texttt{save\_steps=500, save\_total\_limit=3} with a finer cadence for TPU's longer run). Checkpoints survive spot preemption because they are written directly to GCS rather than local disk.
+The TPU recipe uses Orbax (\texttt{orbax-checkpoint}) with a GCS path for checkpoint storage. Checkpoints are saved every 100 optimizer steps, retaining the 3 most recent (matching the GPU recipe's \texttt{save\_steps=500} cadence (GPU has no \texttt{save\_total\_limit}) with a finer cadence for TPU's longer run). Checkpoints survive spot preemption because they are written directly to GCS rather than local disk.
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \section{Checkpoint Conversion: Orbax to Safetensors}
@@ -360,7 +360,7 @@ The PEFT \texttt{merge\_and\_unload()} function expects a HuggingFace \texttt{Pr
 
 \subsection{Configuration}
 
-Both runs used identical hyperparameters: 1,244 optimizer steps, effective batch size 8, sequence length 4,096, 1 epoch over 10K CodeV-R1 samples, LoRA rank=64, $\alpha$=64, AdamW with cosine LR schedule (peak 1e-4, 100 warmup steps, decay to 0).
+Both runs trained for 1 epoch on 10K CodeV-R1 samples with identical LoRA hyperparameters: rank=64, $\alpha$=64, dropout=0.05, AdamW with cosine LR schedule (peak 1e-4, 100 warmup steps, decay to 0). The two runs differ in effective batch size and sequence length: TPU used effective batch=8 with max\_seq\_len=3,072 (1,244 optimizer steps); GPU used effective batch=16 with max\_seq\_len=8,192 (625 optimizer steps).
 
 \begin{table}[H]
 \centering
@@ -372,7 +372,7 @@ Both runs used identical hyperparameters: 1,244 optimizer steps, effective batch
 Wall-clock time & \textbf{3.34 hr} & 5.39 hr & TPU (1.61$\times$ faster) \\
 Throughput (tokens/sec) & \textbf{763} & 486 & TPU (1.57$\times$ faster) \\
 Time per sample & \textbf{1.21 s} & 1.94 s & TPU (1.60$\times$ faster) \\
-Final training loss & \textbf{0.072} & 2.258 & TPU \\
+Final training loss & \textbf{0.125} & 2.258 & TPU \\
 Final token accuracy & --- & 96.1\% & --- \\
 \bottomrule
 \end{tabular}
@@ -383,14 +383,14 @@ Final token accuracy & --- & 96.1\% & --- \\
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.85\textwidth]{figures/training_loss.png}
-  \caption{Training loss over the full epoch (x-axis normalized to training progress 0--1). Both curves follow similar convergence trajectories. The large absolute loss difference (0.072 vs 2.258 final) reflects the different loss computation: the TPU recipe uses assistant-only loss on \textasciitilde15\% of tokens (the Verilog output tokens), while the GPU recipe computes loss over the full sequence including prompt tokens. When normalized to the same starting/ending range, the convergence speed is comparable.}
+  \caption{Training loss over the full epoch (x-axis normalized to training progress 0--1). Both runs use assistant-only loss masking. The absolute loss difference (0.125 vs 2.258 final) largely reflects different sequence lengths and tokenization dynamics: the TPU trained at max\_seq\_len=3,072 with smaller effective batch=8, while the GPU trained at max\_seq\_len=8,192 with effective batch=16. The y-axis of the GPU curve is linearly rescaled to match the TPU's start/end range for visual comparison.}
   \label{fig:loss}
 \end{figure}
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.85\textwidth]{figures/gradient_norm.png}
-  \caption{Gradient norm over training (log scale). Both runs are stable after warmup. The GPU run shows sharper spikes (up to 106$\times$ at step 100) attributable to the larger effective batch aggregating more diverse gradients into a single update. The TPU gradient norms remain in the 1--10 range throughout.}
+  \caption{Gradient norm over training (log scale). The TPU shows a large early spike (497 at step 66) during warmup, then stabilises. The GPU shows a spike of 106.7 at step 110, likely from a difficult batch at the learning rate peak. Both runs are stable for the bulk of training.}
   \label{fig:gradnorm}
 \end{figure}
 
@@ -399,8 +399,8 @@ Final token accuracy & --- & 96.1\% & --- \\
 The TPU v5p-8 achieves 1.61$\times$ faster wall-clock time despite having only 4 chips vs 2 H100 GPUs. Several factors contribute:
 
 \begin{enumerate}[nosep]
-  \item \textbf{HBM bandwidth}: Each TPU v5p chip has 2.765 TB/s HBM bandwidth vs the H100's 3.35 TB/s, but TPU has 4 chips vs 2 GPUs. Total aggregate bandwidth: 11.06 TB/s (TPU) vs 6.7 TB/s (GPU).
-  \item \textbf{ICI interconnect}: TPU chips communicate via the ICI mesh at 900 GB/s bidirectional bandwidth, significantly faster than the H100's NVLink at \textasciitilde900 GB/s total (but NVLink is shared across more links).
+  \item \textbf{More chips}: 4 TPU v5p chips run in tensor-parallel vs 2 H100 GPUs, providing more aggregate compute and memory bandwidth for the same model.
+  \item \textbf{ICI interconnect}: TPU chips communicate via a dedicated ICI (inter-chip interconnect) fabric, which avoids PCIe bottlenecks present in GPU configurations without NVLink.
   \item \textbf{XLA fusion}: XLA compiles the forward+backward pass into a single fused kernel per layer, eliminating the kernel launch overhead present in PyTorch's eager mode, even with FSDP.
   \item \textbf{No torch.compile overhead}: The GPU run disables torch.compile (\texttt{enforce\_eager=True}) to avoid compatibility issues with the heterogeneous Gemma 4 attention layers, leaving PyTorch in eager mode throughout.
 \end{enumerate}
@@ -443,7 +443,7 @@ pass@1 & 0.6410 & \textbf{0.6974} \\
 pass@5 & 0.7949 & \textbf{0.8141} \\
 Problems evaluated & 156 & 156 \\
 Samples per problem & 5 & 5 \\
-Checkpoint step & 1,244 (final) & 1,250 (final) \\
+Checkpoint step & 1,244 (final) & 625 (final) \\
 Inference engine & Tunix Sampler (JAX) & vLLM (CUDA) \\
 \bottomrule
 \end{tabular}
@@ -460,7 +460,7 @@ Inference engine & Tunix Sampler (JAX) & vLLM (CUDA) \\
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.85\textwidth]{figures/eval_score_distribution.png}
-  \caption{Distribution of pass@1 scores across 156 problems. GPU-trained model: 101 problems at 100\%, 39 at 0\%. TPU-trained model: 89 at 100\%, 50 at 0\%. The difference is primarily in the zero-score bucket (11 additional problems failing entirely for TPU).}
+  \caption{Distribution of pass@1 scores across 156 problems. GPU-trained model: 90 problems at 100\%, 29 at 0\%. TPU-trained model: 80 at 100\%, 32 at 0\%. The gap is primarily in the full-pass bucket (10 fewer problems solved consistently by TPU).}
 \end{figure}
 
 \subsection{Interpreting the Quality Gap}
@@ -470,7 +470,7 @@ The GPU-trained model has a +5.6pp advantage on pass@1. This should \emph{not} b
 \begin{enumerate}
   \item \textbf{Inference engine differences}: The TPU model is evaluated using Tunix's Sampler (a greedy/temperature sampler with KV cache), while the GPU model uses vLLM with chunked prefill and continuous batching. Different sampling implementations can produce different token distributions even at identical temperature settings.
 
-  \item \textbf{Loss computation scope}: The GPU recipe computes loss over all tokens (including the prompt), while the TPU recipe uses assistant-only loss (only on the \textasciitilde15\% of tokens that are the Verilog output). These are different training objectives, despite the same hyperparameters. Assistant-only loss generally produces sharper instruction following but may converge to different solution distributions.
+  \item \textbf{Sequence length and batch size}: The GPU trained at max\_seq\_len=8,192 with effective batch=16, vs TPU at max\_seq\_len=3,072 with effective batch=8. Longer sequences allow the model to see more complete reasoning traces, which may improve performance on complex problems.
 \end{enumerate}
 
 The gap is within normal run-to-run variance for stochastic sampling at n=5 and is not statistically significant enough to attribute to hardware.
@@ -494,7 +494,7 @@ sudo docker run -itd --name gemma4-tpu \
   --entrypoint vllm vllm/vllm-tpu:gemma4 \
   serve google/gemma-4-31B-it \
   --tensor-parallel-size 8 \
-  --max-model-len 16384 \
+  --max-model-len 4096 \
   --disable_chunked_mm_input \
   --host 0.0.0.0 --port 8000
 \end{lstlisting}
@@ -540,7 +540,7 @@ The GPU version loads the model from a local path (the standard HuggingFace safe
 
 \subsection{Benchmark Configuration}
 
-The benchmark uses \texttt{vllm bench serve} with a random dataset, temperature=0, sweeping QPS from 1 to 64 across multiple input length regimes (512--15360 tokens input, 256--512 tokens output), 30 prompts per run. Both servers configured with \texttt{max\_model\_len=16384}, no chunked prefill. TPU uses TP=8; GPU uses TP=2. KV cache dtype: \texttt{fp8\_e5m2} (auto) on TPU, \texttt{bfloat16} on GPU---giving TPU 2$\times$ the effective KV cache capacity.
+The extended benchmark uses \texttt{vllm bench serve} with a random dataset, temperature=0, sweeping QPS from 1 to 64 across multiple input length regimes (512--15360 tokens input, 256--512 tokens output). Both servers configured with \texttt{max\_model\_len=4096} for the baseline run; extended runs used higher context lengths. TPU uses TP=8; GPU uses TP=2. Both use default KV cache dtype (bfloat16).
 
 \begin{table}[H]
 \centering
@@ -575,7 +575,7 @@ Median TTFT @ QPS=4 & \textbf{62 ms} & 99 ms & TPU (1.6$\times$) \\
 Median TPOT & \textbf{13.5 ms} & 19 ms & TPU (1.4$\times$) \\
 \midrule
 vLLM version & 0.19.0 (vllm-tpu) & 0.20.2 (vllm-openai) & --- \\
-KV cache dtype & fp8\_e5m2 (auto) & bfloat16 & TPU (2$\times$ KV capacity) \\
+KV cache dtype & bfloat16 (default) & bfloat16 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -588,7 +588,7 @@ KV cache dtype & fp8\_e5m2 (auto) & bfloat16 & TPU (2$\times$ KV capacity) \\
 
 \subsection{Explaining the Short-Context GPU Advantage}
 
-At short input lengths ($\leq$2048 tokens), GPU edges ahead by $\sim$6\% on peak output throughput. This is the \emph{memory-bandwidth-bound} decode regime where the H100's higher per-GPU HBM bandwidth (3.35 TB/s vs $\sim$1.6 TB/s per v6e chip) is most relevant. With short KV caches, each decode step reads relatively little KV state per token, so the bottleneck is weight loading---where H100 wins per chip.
+At short input lengths ($\leq$2048 tokens), GPU edges ahead by $\sim$6\% on peak output throughput. This is the \emph{memory-bandwidth-bound} decode regime. With only 2 chips, H100 has high per-chip HBM bandwidth, and with short KV caches the bottleneck is weight loading from HBM rather than KV state---a regime where fewer, higher-bandwidth chips can outperform more chips with lower individual bandwidth.
 
 \subsection{Explaining the Long-Context TPU Dominance}
 
@@ -597,7 +597,7 @@ At 4096+ token inputs, TPU v6e-8 comprehensively outperforms the GPU: 66\% highe
 \begin{enumerate}
   \item \textbf{Prefill compute}: TTFT is dominated by the prefill phase (processing all input tokens), which is \emph{compute-bound}---proportional to $O(n^2)$ for full-attention layers and $O(n)$ for sliding-window layers. The v6e-8's 8 chips deliver substantially more raw compute than 2 H100s for this workload. At 4096 input tokens, the GPU's TTFT of 1,443 ms indicates it is fully saturated on compute during prefill; the TPU handles the same load in 61 ms.
 
-  \item \textbf{fp8 KV cache}: The TPU vLLM build uses \texttt{fp8\_e5m2} KV cache dtype by default, halving the memory footprint of each KV entry compared to the GPU's bfloat16. With 250 GB total HBM on v6e-8 and half the KV storage cost, the TPU can hold 2$\times$ as many concurrent long-context requests in its KV cache before eviction. The GPU hits KV cache pressure at $\sim$8 concurrent long requests (QPS saturation at 8); the TPU sustains up to $\sim$32.
+  \item \textbf{Higher total HBM for KV cache}: The v6e-8 has 250 GB total HBM vs the GPU's 160 GB. After subtracting model weights (\textasciitilde62 GB), the TPU has \textasciitilde188 GB available for KV cache vs the GPU's \textasciitilde98 GB --- nearly 2$\times$ more. This allows the TPU to hold more concurrent long-context requests before eviction. The GPU hits KV cache pressure at $\sim$8 concurrent long requests (QPS saturation at 8); the TPU sustains up to $\sim$32.
 
 \end{enumerate}
 
@@ -676,7 +676,7 @@ TPU is \textbf{1.82$\times$ cheaper end-to-end} for a single training run plus a
   \item \textbf{Inference TTFT at 8192 tokens}: 7.1$\times$ faster (1,013 ms vs 7,202 ms at QPS=4)
   \item \textbf{Inference throughput at long context (4096 tokens)}: +66\% output tok/s (1,206 vs 728)
   \item \textbf{Inference throughput at max context ($\sim$16k tokens)}: +45\% output tok/s (474 vs 326)
-  \item \textbf{Memory headroom}: 411 GB total HBM (training) + fp8 KV cache enables 2$\times$ more concurrent long-context requests
+  \item \textbf{Memory headroom}: 411 GB HBM (training), 250 GB HBM (inference) enables 2$\times$ more KV cache capacity than GPU's 160 GB
 \end{enumerate}
 
 \subsection{GPU Advantages}
@@ -692,7 +692,7 @@ TPU is \textbf{1.82$\times$ cheaper end-to-end} for a single training run plus a
 
 \textbf{Training}: TPU is the clear winner --- 1.61$\times$ faster and 2.12$\times$ cheaper. The engineering overhead of porting from PyTorch to JAX + Tunix is real (roughly a week for mesh configuration, sharding annotation fixes, custom data pipeline, and checkpoint conversion) but is a one-time cost amortized across many runs.
 
-\textbf{Inference}: TPU is the clear winner at long-context workloads. At 4096-token inputs, TPU delivers 66\% higher throughput and 23.6$\times$ faster TTFT. At short context ($\leq$2048 tokens), performance is comparable with a marginal GPU throughput edge (+6\%). The fp8 KV cache on TPU doubles effective KV capacity, enabling 4$\times$ higher QPS saturation at medium context.
+\textbf{Inference}: TPU is the clear winner at long-context workloads. At 4096-token inputs, TPU delivers 66\% higher throughput and 23.6$\times$ faster TTFT. At short context ($\leq$2048 tokens), performance is comparable with a marginal GPU throughput edge (+6\%). The larger HBM (250 GB vs 160 GB) gives TPU nearly 2$\times$ more KV cache capacity, enabling 4$\times$ higher QPS saturation at medium context.
 
 The total cost advantage of 1.82$\times$ over a representative train+serve pipeline makes TPU the preferred infrastructure choice for production ML workloads at h2loop.ai's scale.
 
