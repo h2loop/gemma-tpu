@@ -206,10 +206,13 @@ else:
 
 with _Phase("LoRA injection + shard"):
     # qwix needs a forward pass to trace the model and inject LoRA weights.
-    # Use tiny dummy inputs (1 sample, 1 token) to minimise memory during tracing.
-    _dummy_tokens = jnp.zeros((1, 1), dtype=jnp.int32)
-    _dummy_positions = jnp.zeros((1, 1), dtype=jnp.int32)
-    _dummy_mask = jnp.ones((1, 1, 1), dtype=jnp.bool_)
+    # seq_len must be >1 (prefill): a length-1 trace hits Gemma4's sliding-window
+    # decode path, which requires a KV cache and raises "Cache or shared cache is
+    # required for local sliding attention in decoding." All three must share the
+    # same seq_len (2) — tokens, positions, and mask.
+    _dummy_tokens = jnp.zeros((1, 2), dtype=jnp.int32)
+    _dummy_positions = jnp.zeros((1, 2), dtype=jnp.int32)
+    _dummy_mask = jnp.ones((1, 2, 2), dtype=jnp.bool_)
     lora_model = qwix.apply_lora_to_model(
         base_model, lora_provider,
         _dummy_tokens, _dummy_positions, None, _dummy_mask,
