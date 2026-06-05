@@ -129,7 +129,16 @@ def main():
     ap.add_argument("--output-dir", default="/dev/shm/merged_gemma4_31b")
     ap.add_argument("--rank",  type=int,   default=64)
     ap.add_argument("--alpha", type=float, default=64.0)
+    ap.add_argument("--push-to-hub", default=None,
+                    help="HuggingFace repo id to upload the merged model to (e.g. user/model)")
+    ap.add_argument("--hf-token", default=os.environ.get("HF_TOKEN"),
+                    help="HuggingFace token (defaults to $HF_TOKEN)")
+    ap.add_argument("--private", action="store_true",
+                    help="Create the Hub repo as private (default public)")
     args = ap.parse_args()
+
+    if args.push_to_hub and not args.hf_token:
+        ap.error("--push-to-hub requires --hf-token (or the HF_TOKEN env var)")
 
     mesh = build_mesh()
     model_config = gemma4_model_lib.ModelConfig.gemma4_31b()
@@ -145,8 +154,11 @@ def main():
     lora_provider = qwix.LoraProvider(
         module_path=_LORA_MODULES, rank=args.rank, alpha=args.alpha,
     )
-    dummy = jnp.zeros((1, 1), dtype=jnp.int32)
-    dummy_m = jnp.ones((1, 1, 1), dtype=jnp.bool_)
+    # seq_len must be >1 (prefill): a length-1 trace hits Gemma4's sliding-window
+    # decode path, which requires a KV cache and raises "Cache or shared cache is
+    # required for local sliding attention in decoding."
+    dummy = jnp.zeros((1, 2), dtype=jnp.int32)
+    dummy_m = jnp.ones((1, 2, 2), dtype=jnp.bool_)
     lora_model = qwix.apply_lora_to_model(
         base_model, lora_provider, dummy, dummy, None, dummy_m,
     )
@@ -280,6 +292,23 @@ def main():
     size_gb = os.path.getsize(merged_path) / 1e9
     print(f"[merge] Done. Merged model at {args.output_dir} ({size_gb:.1f} GB)")
     print(f"[merge] Load with: params_safetensors.create_model_from_safe_tensors('{args.output_dir}', ...)")
+
+    # ── Optionally push to the HuggingFace Hub ────────────────────────────────
+    if args.push_to_hub:
+        from huggingface_hub import HfApi
+        api = HfApi(token=args.hf_token)
+        print(f"[push] Authenticated as {api.whoami().get('name')}")
+        api.create_repo(args.push_to_hub, repo_type="model",
+                        private=args.private, exist_ok=True)
+        print(f"[push] Uploading {args.output_dir} -> {args.push_to_hub} "
+              f"({'private' if args.private else 'public'}) ...")
+        api.upload_folder(
+            folder_path=args.output_dir,
+            repo_id=args.push_to_hub,
+            repo_type="model",
+            commit_message=f"Merged Gemma4 LoRA (step {args.ckpt_step or 'latest'})",
+        )
+        print(f"[push] Done. https://huggingface.co/{args.push_to_hub}")
 
 
 if __name__ == "__main__":
